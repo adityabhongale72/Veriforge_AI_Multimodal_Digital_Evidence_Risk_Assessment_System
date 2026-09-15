@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@source "../../templates/**/*.html";
+
+/* --------------------------------------------------
+   Theme Configuration (Tailwind CSS v4)
+-------------------------------------------------- */
+@theme {
+  /* Fonts */
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Cyber / Dark Glass Palette */
+  --color-cyber-base: #060b1e;
+  --color-cyber-surface: rgba(13, 21, 50, 0.65);
+  --color-cyber-surface-hover: rgba(20, 32, 74, 0.75);
+  --color-cyber-border: rgba(70, 110, 220, 0.2);
+  --color-cyber-border-hover: rgba(0, 229, 255, 0.4);
+
+  /* Neon Accents */
+  --color-neon-blue: #2f65f6;
+  --color-neon-cyan: #00e5ff;
+  --color-neon-purple: #8b5cf6;
+  --color-neon-pink: #ff2a6d;
+  --color-neon-amber: #ff9f1c;
+  --color-neon-emerald: #00f5a0;
+
+  /* Glow Shadows */
+  --shadow-glow-cyan: 0 0 20px -3px rgba(0, 229, 255, 0.35);
+  --shadow-glow-blue: 0 0 25px -4px rgba(47, 101, 246, 0.4);
+  --shadow-glow-pink: 0 0 25px -4px rgba(255, 42, 109, 0.45);
+  --shadow-glow-purple: 0 0 25px -4px rgba(139, 92, 246, 0.35);
+}
+
+/* --------------------------------------------------
+   Global Canvas & Theme Styles
+-------------------------------------------------- */
+body {
+  background-color: var(--color-cyber-base);
+  background-image: 
+    radial-gradient(circle at 12% 18%, rgba(30, 41, 102, 0.45) 0%, transparent 40%),
+    radial-gradient(circle at 88% 82%, rgba(139, 92, 246, 0.18) 0%, transparent 45%);
+  background-attachment: fixed;
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* --------------------------------------------------
+   Glassmorphic Utility Components
+-------------------------------------------------- */
+@utility glass-card {
+  background-color: var(--color-cyber-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-cyber-border);
+  border-radius: 1rem;
+}
+
+@utility glass-card-interactive {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    background-color: var(--color-cyber-surface-hover);
+    border-color: var(--color-cyber-border-hover);
+    box-shadow: var(--shadow-glow-cyan);
+  }
+}
+
+@utility cyber-input {
+  background-color: rgba(6, 11, 30, 0.7);
+  border: 1px solid var(--color-cyber-border);
+  color: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: var(--color-neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+  }
+}

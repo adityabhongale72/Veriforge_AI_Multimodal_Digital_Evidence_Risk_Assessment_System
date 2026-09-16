@@ -1,8 +1,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-# Iske baad aapke baaki saare imports aane chahiye
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime, timezone
 import shutil
@@ -63,9 +62,18 @@ from evidenceapp.models.video_forensics import VideoForensicsDetector
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.join(BASE_DIR, "evidenceapp", "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "evidenceapp", "static")
-UPLOAD_DIR = os.path.join(BASE_DIR, "evidenceapp", "uploads")
-REPORT_DIR = os.path.join(BASE_DIR, "evidenceapp", "reports")
-MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+# Safe routing for read-only serverless filesystems (Vercel / AWS Lambda)
+IS_SERVERLESS = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+if IS_SERVERLESS:
+    UPLOAD_DIR = os.path.join("/tmp", "evidenceapp", "uploads")
+    REPORT_DIR = os.path.join("/tmp", "evidenceapp", "reports")
+    MODELS_DIR = os.path.join("/tmp", "models")
+else:
+    UPLOAD_DIR = os.path.join(BASE_DIR, "evidenceapp", "uploads")
+    REPORT_DIR = os.path.join(BASE_DIR, "evidenceapp", "reports")
+    MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)

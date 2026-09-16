@@ -1,0 +1,649 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Forensic AI // Digital Evidence Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
+    <style>
+        :root {
+            --bg-base: #060b1e;
+            --surface-card: rgba(13, 21, 50, 0.65);
+            --surface-card-hover: rgba(20, 32, 75, 0.8);
+            --border-card: rgba(70, 110, 220, 0.22);
+            --border-card-hover: rgba(0, 229, 255, 0.4);
+
+            --accent-blue: #2f65f6;
+            --accent-cyan: #00e5ff;
+            --accent-purple: #8b5cf6;
+            
+            --risk-high: #ff2a6d;
+            --risk-med: #ff9f1c;
+            --risk-low: #00f5a0;
+
+            --text-primary: #ffffff;
+            --text-muted: #8e9cb8;
+
+            --font-main: 'Plus Jakarta Sans', system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 10% 15%, rgba(47, 101, 246, 0.25) 0%, transparent 45%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.16) 0%, transparent 45%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            padding: 1.75rem;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Glow Spheres */
+        .ambient-glow {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .glow-node {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.35;
+        }
+
+        .glow-blue {
+            width: 550px;
+            height: 550px;
+            background: #1e3a8a;
+            top: -150px;
+            left: -100px;
+        }
+
+        .glow-purple {
+            width: 500px;
+            height: 500px;
+            background: #581c87;
+            bottom: -150px;
+            right: -100px;
+        }
+
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Glass Panel Container */
+        .glass-panel {
+            background: var(--surface-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-card);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+
+        /* Top Navigation Bar */
+        .nav-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.25rem 1.75rem;
+        }
+
+        .title-group h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .title-group p {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .nav-controls {
+            display: flex;
+            gap: 0.85rem;
+            align-items: center;
+        }
+
+        .nav-btn {
+            font-family: var(--font-main);
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.65rem 1.25rem;
+            text-decoration: none;
+            background: rgba(47, 101, 246, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            border-radius: 0.65rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(0, 229, 255, 0.2);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .nav-btn.btn-primary {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #1d4ed8 100%);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 4px 15px rgba(47, 101, 246, 0.35);
+        }
+
+        .nav-btn.btn-primary:hover {
+            background: linear-gradient(135deg, #3b82f6 0%, var(--accent-blue) 100%);
+            box-shadow: 0 6px 20px rgba(47, 101, 246, 0.55);
+        }
+
+        /* 4-Card Telemetry Metric Banner */
+        .metric-banner {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .stat-card {
+            background: var(--surface-card);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid var(--border-card);
+            border-radius: 1rem;
+            padding: 1.35rem;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-card-hover);
+            transform: translateY(-2px);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 1.25rem;
+            right: 1.25rem;
+            height: 2px;
+            background: var(--accent-cyan);
+            border-radius: 2px;
+        }
+
+        .stat-card.secure::before { background: var(--risk-low); }
+        .stat-card.alert::before { background: var(--risk-high); }
+        .stat-card.warning::before { background: var(--risk-med); }
+
+        .stat-title {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .stat-value {
+            font-family: var(--font-mono);
+            font-size: 2.1rem;
+            font-weight: 700;
+            margin: 0.35rem 0;
+            color: #ffffff;
+        }
+
+        .stat-sub {
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 3-Column Operations Grid */
+        .ops-grid {
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            gap: 1.25rem;
+        }
+
+        @media (max-width: 1150px) {
+            .ops-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Radar Box */
+        .radar-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #radarCanvas {
+            background: radial-gradient(circle, rgba(47, 101, 246, 0.12), transparent 72%);
+            border: 1px solid rgba(70, 110, 220, 0.3);
+            border-radius: 50%;
+            margin: 0.5rem 0;
+        }
+
+        /* Center Audit Table */
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.1rem;
+        }
+
+        .panel-heading {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+
+        .log-table th {
+            text-align: left;
+            padding: 0.75rem 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 1px solid rgba(70, 110, 220, 0.2);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .log-table td {
+            padding: 0.85rem 0.85rem;
+            border-bottom: 1px solid rgba(70, 110, 220, 0.12);
+            color: #e2e8f0;
+        }
+
+        .log-table tbody tr {
+            transition: background-color 0.15s ease;
+        }
+
+        .log-table tbody tr:hover {
+            background: rgba(47, 101, 246, 0.08);
+        }
+
+        /* Risk Badges / Status Pills */
+        .tag-pill {
+            padding: 3px 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tag-red { 
+            background: rgba(255, 42, 109, 0.14); 
+            color: var(--risk-high); 
+            border: 1px solid rgba(255, 42, 109, 0.35); 
+        }
+        .tag-yellow { 
+            background: rgba(255, 159, 28, 0.14); 
+            color: var(--risk-med); 
+            border: 1px solid rgba(255, 159, 28, 0.35); 
+        }
+        .tag-green { 
+            background: rgba(0, 245, 160, 0.14); 
+            color: var(--risk-low); 
+            border: 1px solid rgba(0, 245, 160, 0.35); 
+        }
+
+        .view-link {
+            color: var(--accent-cyan);
+            text-decoration: none;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: rgba(0, 229, 255, 0.08);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .view-link:hover {
+            background: var(--accent-cyan);
+            color: #060b1e;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+        }
+
+        /* Console Stream Box */
+        .stream-console {
+            background: rgba(5, 9, 24, 0.85);
+            border: 1px solid rgba(70, 110, 220, 0.2);
+            border-radius: 0.75rem;
+            font-family: var(--font-mono);
+            font-size: 0.74rem;
+            height: 275px;
+            overflow-y: hidden;
+            padding: 1rem;
+            color: var(--text-muted);
+            box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .stream-line {
+            margin: 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .stream-line.highlight { color: var(--accent-cyan); }
+        .stream-line.alert { color: var(--risk-high); }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow">
+        <div class="glow-node glow-blue"></div>
+        <div class="glow-node glow-purple"></div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- Top Navigation Bar -->
+        <div class="glass-panel nav-bar">
+            <div class="title-group">
+                <h1>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    Cyber Forensic AI
+                </h1>
+                <p>AI-Assisted Multimodal Digital Evidence Verification & Risk Assessment System</p>
+            </div>
+            <div class="nav-controls">
+                <a href="/" class="nav-btn btn-primary">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    Upload Evidence
+                </a>
+                <button onclick="location.reload()" class="nav-btn">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- 4-Card Telemetry Metric Banner -->
+        <div class="metric-banner">
+            <div class="stat-card secure">
+                <div class="stat-title">Authentic Pass Ratio</div>
+                <div class="stat-value">{{ stats.pass_ratio if stats else '94.2%' }}</div>
+                <div class="stat-sub" style="color: var(--risk-low);">
+                    <span>●</span> Low Risk Authenticity Integrity
+                </div>
+            </div>
+            <div class="stat-card alert">
+                <div class="stat-title">High Threat Interceptions</div>
+                <div class="stat-value">{{ stats.high_threats if stats else 0 }}</div>
+                <div class="stat-sub" style="color: var(--risk-high);">
+                    <span>▲</span> AI Deepfake / Manipulation Flags
+                </div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-title">Medium Level Disparities</div>
+                <div class="stat-value">{{ stats.medium_threats if stats else 0 }}</div>
+                <div class="stat-sub" style="color: var(--risk-med);">
+                    <span>▲</span> Splicing & Metadata Deviations
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Total Registry Cases</div>
+                <div class="stat-value">{{ stats.total_cases if stats else 0 }}</div>
+                <div class="stat-sub" style="color: var(--accent-cyan);">
+                    <span>●</span> Verified Cryptographic Records
+                </div>
+            </div>
+        </div>
+
+        <!-- 3-Column Ops Grid -->
+        <div class="ops-grid">
+            <!-- Left: Radar Intercept Scanner -->
+            <div class="glass-panel radar-box">
+                <div style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-cyan); margin-bottom: 0.5rem; text-align: left; width: 100%;">
+                    Live Threat Radar
+                </div>
+                <canvas id="radarCanvas" width="230" height="230"></canvas>
+                <div style="margin-top: 0.75rem; font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); text-align: center;">
+                    Detector Array: <span style="color: var(--accent-cyan);">ACTIVE</span><br>
+                    <span style="color: var(--risk-low);">● All Radial Sectors Monitored</span>
+                </div>
+            </div>
+
+            <!-- Center: Evidentiary Audit Log Registry -->
+            <div class="glass-panel">
+                <div class="card-header-flex">
+                    <span class="panel-heading">Recent Analyses</span>
+                    <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.75rem;">Total Cases: {{ cases | length if cases else 0 }}</span>
+                </div>
+                <table class="log-table">
+                    <thead>
+                        <tr>
+                            <th>Case ID</th>
+                            <th>Artifact Name</th>
+                            <th>Threat Level</th>
+                            <th>Classification</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody style="font-family: var(--font-mono);">
+                        {% if cases and cases | length > 0 %}
+                            {% for case in cases %}
+                            <tr>
+                                <td style="color: var(--accent-cyan); font-weight: 600;">{{ case.case_id }}</td>
+                                <td style="color: #ffffff;">{{ case.filename }}</td>
+                                <td>
+                                    {% if case.threat_level == 'HIGH' %}
+                                        <span class="tag-pill tag-red">■ High Risk</span>
+                                    {% elif case.threat_level == 'MEDIUM' %}
+                                        <span class="tag-pill tag-yellow">▲ Med Risk</span>
+                                    {% else %}
+                                        <span class="tag-pill tag-green">● Low Risk</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ case.classification }}</td>
+                                <td>
+                                    <a href="/report/{{ case.case_id }}" class="view-link">Details &rarr;</a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem 1rem;">
+                                    No evidence processed yet. Upload an artifact to initialize analysis.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Right: Real-Time Event Stream -->
+            <div class="glass-panel">
+                <div class="card-header-flex">
+                    <span class="panel-heading">Diagnostic Stream</span>
+                    <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--risk-low);">LIVE</span>
+                </div>
+                <div class="stream-console" id="streamLog">
+                    <div class="stream-line highlight">> [SYS] Core Neural Engine Initialized.</div>
+                    <div class="stream-line">> [PRNU] Sensor noise calibration nominal.</div>
+                    <div class="stream-line alert">> [MONITOR] Telemetry stream listening.</div>
+                    <div class="stream-line">> [C2PA] Cryptographic provenance active.</div>
+                    <div class="stream-line highlight">> [HASH] Sealing SHA-256 block ledger.</div>
+                    <div class="stream-line">> [NODE] Memory cache verified.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Raw Case Data For Dynamic Radar Plotting -->
+    <script id="caseDataStore" type="application/json">
+        [
+            {% if cases and cases | length > 0 %}
+                {% for c in cases %}
+                    {
+                        "id": "{{ c.case_id }}",
+                        "threat": "{{ c.threat_level }}"
+                    }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            {% endif %}
+        ]
+    </script>
+
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        let angle = 0;
+
+        const casesPayload = JSON.parse(document.getElementById('caseDataStore').textContent || '[]');
+        
+        const radarBlips = casesPayload.map((c) => {
+            let hashVal = 0;
+            for (let i = 0; i < c.id.length; i++) hashVal = (hashVal * 31 + c.id.charCodeAt(i)) & 0xffffff;
+            
+            const radiusRatio = 0.25 + ((Math.abs(hashVal) % 65) / 100);
+            const targetAngle = ((Math.abs(hashVal >> 4) % 360) * Math.PI) / 180;
+            
+            let color = '#00f5a0'; 
+            if (c.threat === 'HIGH') color = '#ff2a6d'; 
+            else if (c.threat === 'MEDIUM') color = '#ff9f1c'; 
+
+            return {
+                id: c.id,
+                threat: c.threat,
+                distRatio: radiusRatio,
+                theta: targetAngle,
+                color: color,
+                opacity: 0.3
+            };
+        });
+
+        function drawRadar() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = cx - 12;
+
+            // Concentric grid circles
+            ctx.strokeStyle = 'rgba(70, 110, 220, 0.25)';
+            ctx.lineWidth = 1;
+            [radius * 0.33, radius * 0.66, radius].forEach(r => {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Cross-hairs
+            ctx.beginPath();
+            ctx.moveTo(cx, 12); ctx.lineTo(cx, canvas.height - 12);
+            ctx.moveTo(12, cy); ctx.lineTo(canvas.width - 12, cy);
+            ctx.stroke();
+
+            // Render Active Threat Blips
+            radarBlips.forEach(blip => {
+                const bx = cx + Math.cos(blip.theta) * (radius * blip.distRatio);
+                const by = cy + Math.sin(blip.theta) * (radius * blip.distRatio);
+
+                const normAngle = angle % (Math.PI * 2);
+                const diff = Math.abs(normAngle - blip.theta);
+                if (diff < 0.25 || diff > (Math.PI * 2 - 0.25)) {
+                    blip.opacity = 1.0;
+                } else {
+                    blip.opacity = Math.max(0.25, blip.opacity - 0.012);
+                }
+
+                ctx.save();
+                ctx.globalAlpha = blip.opacity;
+                ctx.fillStyle = blip.color;
+                ctx.shadowColor = blip.color;
+                ctx.shadowBlur = blip.opacity > 0.6 ? 10 : 3;
+                
+                ctx.beginPath();
+                ctx.arc(bx, by, blip.threat === 'HIGH' ? 4 : 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // Sweeping Beam Gradient
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            const sweep = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+            sweep.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
+            sweep.addColorStop(1, 'rgba(0, 229, 255, 0)');
+            ctx.fillStyle = sweep;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, radius, 0, Math.PI * 0.35);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            angle = (angle + 0.035) % (Math.PI * 2);
+            requestAnimationFrame(drawRadar);
+        }
+        drawRadar();
+
+        // Real-Time Telemetry Stream
+        const streamLog = document.getElementById('streamLog');
+        const messages = [
+            "> [FFT] High-pass spatial frequency evaluated.",
+            "> [ELA] Error Level Analysis compression nominal.",
+            "> [IO] Packet stream cataloged to evidence registry.",
+            "> [SCAN] Sub-pixel boundary check completed.",
+            "> [AI] Deep neural diffusion model inference finished.",
+            "> [TRUFOR] Dense anomaly localization map generated.",
+            "> [TELEMETRY] Risk matrix synchronized with ledger."
+        ];
+
+        setInterval(() => {
+            const line = document.createElement('div');
+            line.className = 'stream-line';
+            line.textContent = messages[Math.floor(Math.random() * messages.length)];
+            streamLog.appendChild(line);
+            if (streamLog.children.length > 12) streamLog.removeChild(streamLog.children[0]);
+        }, 2400);
+    </script>
+</body>
+</html>

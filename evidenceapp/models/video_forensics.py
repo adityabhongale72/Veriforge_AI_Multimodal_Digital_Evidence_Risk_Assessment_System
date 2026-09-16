@@ -4,11 +4,31 @@ import urllib.request
 import subprocess
 import cv2
 import numpy as np
-import torch
-import torch.nn as nn
 from PIL import Image
-from ultralytics import YOLO
-from evidenceapp.models.image_forensics import ImageForensicsDetector
+
+# Graceful imports for heavy ML packages to prevent boot crashes
+try:
+    import torch
+    import torch.nn as nn
+    TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    nn = None
+    TORCH_AVAILABLE = False
+
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO = None
+    YOLO_AVAILABLE = False
+
+try:
+    from evidenceapp.models.image_forensics import ImageForensicsDetector
+    IMAGE_DETECTOR_AVAILABLE = True
+except ImportError:
+    ImageForensicsDetector = None
+    IMAGE_DETECTOR_AVAILABLE = False
 
 # YuNet model configuration (OpenCV native lightweight ONNX face detector)
 YUNET_MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
@@ -17,10 +37,13 @@ YUNET_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fac
 
 class VideoForensicsDetector:
     def __init__(self, max_keyframes: int = 4, yolo_model_name: str = "yolo11n.pt"):
-        # Capping keyframes guarantees sub-second video evaluation on standard CPU
         self.max_keyframes = max_keyframes
-        self.image_detector = ImageForensicsDetector()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.image_detector = ImageForensicsDetector() if IMAGE_DETECTOR_AVAILABLE else None
+        
+        if TORCH_AVAILABLE:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = "cpu"
 
         # 1. Initialize YOLO11
         self.yolo_model = None
@@ -46,8 +69,8 @@ class VideoForensicsDetector:
 
         self.models_used = [
             "ViT Deep Diffusion Keyframe Classifier",
-            "TruFor (SegFormer + Noiseprint++) Frame Splicing Engine",
-            "Ultralytics YOLO11 (Real-Time Object & Person Tracker)",
+            "TruFor Frame Splicing Engine",
+            "Ultralytics YOLO (Object & Person Tracker)",
             "RetinaFace (YuNet Deep Landmark Detector)",
             "F3-Net (Frequency-Aware Dual-Stream Forgery Detector)",
             "High-Frequency Sensor Residuals (PRNU Floor Analysis)",
@@ -57,10 +80,12 @@ class VideoForensicsDetector:
         ]
 
     def _init_yolo11(self, model_name: str):
+        if not YOLO_AVAILABLE:
+            return
         try:
             self.yolo_model = YOLO(model_name)
         except Exception as e:
-            print(f"[Warning] Failed to load YOLO11: {e}")
+            print(f"[Warning] Failed to load YOLO: {e}")
             self.yolo_model = None
 
     def _init_retinaface_yunet(self):
@@ -77,10 +102,13 @@ class VideoForensicsDetector:
                     nms_threshold=0.3,
                     top_k=2000
                 )
-        except Exception:
+        except Exception as e:
+            print(f"[Warning] YuNet initialization skipped: {e}")
             self.retina_detector = None
 
     def _init_f3net(self):
+        if not TORCH_AVAILABLE:
+            return
         try:
             weights_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "f3net.pth")
             if os.path.exists(weights_path):
@@ -94,7 +122,7 @@ class VideoForensicsDetector:
             self.f3net_model = None
 
     def _run_f3net_inference(self, face_crop: np.ndarray) -> float:
-        if self.f3net_model is None or face_crop.size == 0:
+        if not TORCH_AVAILABLE or self.f3net_model is None or face_crop.size == 0:
             return 0.0
         try:
             face_resized = cv2.resize(face_crop, (299, 299))
@@ -115,10 +143,9 @@ class VideoForensicsDetector:
             return {"person_boxes": [], "tracked_ids": 0, "detected_classes": []}
 
         try:
-            # Inference on downscaled input (640 max dimension) for lower CPU latency
             results = self.yolo_model.predict(
                 source=frame_bgr,
-                imgsz=480,
+                imgsz=384,
                 verbose=False,
                 conf=0.40
             )
@@ -150,7 +177,6 @@ class VideoForensicsDetector:
 
         if self.retina_detector is not None:
             try:
-                # Downscale for face scanning
                 scale = 320.0 / max(h, w)
                 tw, th = int(w * scale), int(h * scale)
                 small_frame = cv2.resize(frame_bgr, (tw, th))
@@ -166,10 +192,13 @@ class VideoForensicsDetector:
                 pass
 
         if self.face_cascade is not None:
-            gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-            faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(40, 40))
-            for (x, y, fw, fh) in faces:
-                detected_boxes.append((int(x), int(y), int(fw), int(fh)))
+            try:
+                gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+                faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(40, 40))
+                for (x, y, fw, fh) in faces:
+                    detected_boxes.append((int(x), int(y), int(fw), int(fh)))
+            except Exception:
+                pass
 
         if len(detected_boxes) == 0 and len(yolo_persons) > 0:
             for (px, py, pw, ph) in yolo_persons:
@@ -181,14 +210,12 @@ class VideoForensicsDetector:
         return detected_boxes
 
     def _compute_sensor_noise_floor(self, gray_frame: np.ndarray) -> float:
-        # Fast residual variance estimation
         blurred = cv2.GaussianBlur(gray_frame, (3, 3), 0)
         residual = cv2.absdiff(gray_frame, blurred)
         return float(np.var(residual))
 
     def _compute_temporal_warp_divergence(self, prev_gray: np.ndarray, curr_gray: np.ndarray) -> tuple:
         try:
-            # Downsample images to 256px width for near-instant optical flow
             h, w = curr_gray.shape[:2]
             scale = 256.0 / max(h, w)
             small_prev = cv2.resize(prev_gray, (int(w * scale), int(h * scale)))
@@ -303,7 +330,6 @@ class VideoForensicsDetector:
         os.makedirs(temp_dir, exist_ok=True)
         base_name = os.path.splitext(os.path.basename(video_path))[0]
 
-        # Uniform Keyframe Selection: Pick exactly 3 to 4 points across the video duration
         if total_frames > 0:
             sample_points = min(self.max_keyframes, total_frames)
             target_indices = np.linspace(0, total_frames - 1, sample_points, dtype=int).tolist()
@@ -328,7 +354,6 @@ class VideoForensicsDetector:
         prev_gray = None
         analyzed_frames = 0
 
-        # Targeted Seeking Loop: Avoids sequential decoding of every unused frame
         for target_idx in target_indices:
             cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
             ret, frame = cap.read()
@@ -338,45 +363,46 @@ class VideoForensicsDetector:
             analyzed_frames += 1
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # 1. Deep Neural Keyframe Inspection (ViT & TruFor)
-            temp_frame_path = os.path.join(temp_dir, f"{base_name}_kf_{target_idx}.jpg")
-            cv2.imwrite(temp_frame_path, frame)
-            try:
-                kf_analysis = self.image_detector.analyze_evidence(temp_frame_path)
-                kf_ai = float(kf_analysis.get("ai_generation_confidence", 0.0))
-                kf_manip = float(kf_analysis.get("manipulation_confidence", 0.0))
+            # Deep Neural Keyframe Inspection
+            if self.image_detector is not None:
+                temp_frame_path = os.path.join(temp_dir, f"{base_name}_kf_{target_idx}.jpg")
+                cv2.imwrite(temp_frame_path, frame)
+                try:
+                    kf_analysis = self.image_detector.analyze_evidence(temp_frame_path)
+                    kf_ai = float(kf_analysis.get("ai_generation_confidence", 0.0))
+                    kf_manip = float(kf_analysis.get("manipulation_confidence", 0.0))
 
-                keyframe_ai_scores.append(kf_ai)
-                keyframe_manip_scores.append(kf_manip)
+                    keyframe_ai_scores.append(kf_ai)
+                    keyframe_manip_scores.append(kf_manip)
 
-                cur_threat = max(kf_ai, kf_manip)
-                if cur_threat > max_frame_anomaly:
-                    max_frame_anomaly = cur_threat
-                    highest_threat_mask_path = kf_analysis.get("ela_mask_path", "")
-            except Exception as e:
-                print(f"[Warning] Keyframe analysis bypass: {e}")
-            finally:
-                if os.path.exists(temp_frame_path):
-                    try:
-                        os.remove(temp_frame_path)
-                    except OSError:
-                        pass
+                    cur_threat = max(kf_ai, kf_manip)
+                    if cur_threat > max_frame_anomaly:
+                        max_frame_anomaly = cur_threat
+                        highest_threat_mask_path = kf_analysis.get("ela_mask_path", "")
+                except Exception as e:
+                    print(f"[Warning] Keyframe analysis bypass: {e}")
+                finally:
+                    if os.path.exists(temp_frame_path):
+                        try:
+                            os.remove(temp_frame_path)
+                        except OSError:
+                            pass
 
-            # 2. Sensor PRNU residual variance
+            # Sensor PRNU residual variance
             noise_floors.append(self._compute_sensor_noise_floor(gray))
 
-            # 3. Object & Person Tracking
+            # Object & Person Tracking
             yolo_data = self._run_yolo11_tracking(frame)
             yolo_person_counts.append(len(yolo_data["person_boxes"]))
             detected_objects.update(yolo_data["detected_classes"])
 
-            # 4. Accelerated Temporal Divergence
+            # Accelerated Temporal Divergence
             if prev_gray is not None:
                 flow_var, ang_disp, _ = self._compute_temporal_warp_divergence(prev_gray, gray)
                 flow_variances.append(flow_var)
                 angular_dispersions.append(ang_disp)
 
-            # 5. Face Extraction & F3-Net Dual-Stream Inference
+            # Face Extraction & F3-Net Dual-Stream Inference
             faces = self._extract_faces(frame, yolo_data["person_boxes"])
             if faces:
                 retinaface_count += 1
@@ -397,7 +423,6 @@ class VideoForensicsDetector:
 
         cap.release()
 
-        # Aggregate Temporal Statistics
         avg_noise = float(np.mean(noise_floors)) if noise_floors else 3.0
         avg_flow_var = float(np.mean(flow_variances)) if flow_variances else 0.0
         avg_ang_disp = float(np.mean(angular_dispersions)) if angular_dispersions else 0.0
@@ -408,7 +433,6 @@ class VideoForensicsDetector:
         max_kf_ai = max(keyframe_ai_scores) if keyframe_ai_scores else 0.0
         max_kf_manip = max(keyframe_manip_scores) if keyframe_manip_scores else 0.0
 
-        # Heuristic synthesis calculations
         ai_noise_score = float(np.clip(1.0 - (avg_noise / 1.5), 0.05, 0.95))
         warp_metric = float(np.clip((avg_ang_disp / 2.0) * 0.5 + (avg_flow_var / 20.0) * 0.5, 0.05, 0.95))
         temporal_ai_prob = (0.50 * ai_noise_score) + (0.50 * warp_metric)
@@ -418,7 +442,6 @@ class VideoForensicsDetector:
         if not has_camera and synthetic_mux:
             temporal_ai_prob = max(temporal_ai_prob, 0.65)
 
-        # Multi-Branch Fusion Decision
         final_ai_prob = max(temporal_ai_prob * 0.6, max_kf_ai)
         final_manip_prob = max(float(np.clip(avg_face_jitter * 0.6, 0.04, 0.35)), max_kf_manip, max_f3_score)
 

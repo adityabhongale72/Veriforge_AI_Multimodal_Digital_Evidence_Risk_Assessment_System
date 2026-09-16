@@ -26,6 +26,17 @@ except ImportError:
         SamModel, SamProcessor = None, None
 
 
+def _get_reports_dir() -> str:
+    """Returns a writable reports directory depending on host environment."""
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        reports_dir = os.path.join("/tmp", "evidenceapp", "reports")
+    else:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        reports_dir = os.path.join(base_dir, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    return reports_dir
+
+
 # ==============================================================================
 # PROMPTABLE SEGMENTATION ENGINE (Segment Anything Model - SAM)
 # ==============================================================================
@@ -76,7 +87,6 @@ class PromptableSegmentor:
             inputs = None
 
             if input_points is not None:
-                # Format: [batch, num_prompts, points_per_prompt, 2]
                 pts = [input_points]
                 inputs = self.sam_processor(pil_img, input_points=pts, return_tensors="pt").to(self.device)
             elif input_boxes is not None:
@@ -95,7 +105,6 @@ class PromptableSegmentor:
                 inputs["reshaped_input_sizes"].cpu()
             )
 
-            # Extract highest confidence mask
             binary_mask = masks[0][0][0].numpy().astype(np.uint8) * 255
             return binary_mask
         except Exception as e:
@@ -370,10 +379,7 @@ class ImageForensicsDetector:
             self.face_cascade = None
 
     def generate_ela_image(self, image_path: str, quality: int = 90, scale_factor: int = 15) -> tuple[str, float]:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        reports_dir = os.path.join(base_dir, "reports")
-        os.makedirs(reports_dir, exist_ok=True)
-
+        reports_dir = _get_reports_dir()
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         ela_output_path = os.path.join(reports_dir, f"{base_name}_ela.jpg")
         temp_recomp = os.path.join(reports_dir, f"{base_name}_temp.jpg")
@@ -451,9 +457,7 @@ class ImageForensicsDetector:
             return {"score": 0.0, "finding": "Corrupted image.", "map_path": ""}
 
         h_orig, w_orig = img_bgr.shape[:2]
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        reports_dir = os.path.join(base_dir, "reports")
-        os.makedirs(reports_dir, exist_ok=True)
+        reports_dir = _get_reports_dir()
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         mantra_map_path = os.path.join(reports_dir, f"{base_name}_mantranet_map.jpg")
 
@@ -506,9 +510,7 @@ class ImageForensicsDetector:
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        reports_dir = os.path.join(base_dir, "reports")
-        os.makedirs(reports_dir, exist_ok=True)
+        reports_dir = _get_reports_dir()
         base_name = os.path.splitext(os.path.basename(image_path))[0]
         trufor_map_path = os.path.join(reports_dir, f"{base_name}_trufor_map.jpg")
 

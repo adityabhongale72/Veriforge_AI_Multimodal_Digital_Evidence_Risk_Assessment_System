@@ -6,3 +6,6 @@ flask-cors
 python-multipart
 opencv-python-headless
 numpy
+Pillow
+google-genai
+reportlab

@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime, timezone
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 import shutil
 import subprocess
 import time

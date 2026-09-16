@@ -1,8 +1,10 @@
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from datetime import datetime, timezone
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Iske baad aapke baaki saare imports aane chahiye
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from datetime import datetime, timezone
 import shutil
 import subprocess
 import time
